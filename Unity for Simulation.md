@@ -1,25 +1,10 @@
-
-- [Prowl](https://github.com/ProwlEngine/Prowl)
-
-| 需求                | Unity 内的现成机制                                                                                                                                  | 状况               |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| 接入 MuJoCo         | [官方 Unity 插件](https://mujoco.readthedocs.io/en/3.6.0/unity.html)，随 MuJoCo 发行，3.11 文档仍在维护                                                      | 可用，有下述限制         |
-| 物理步长脱离 wall clock | 把 simulation mode 设为 Script 后手动调用 [`Physics.Simulate`](https://docs.unity3d.com/ScriptReference/Physics.Simulate.html)，每次传固定步长                | 可用               |
-| 由外部模型驱动步进         | ML-Agents 的 [`DisableAutomaticStepping()` 与 `EnvironmentStep()`](https://docs.unity3d.com/Packages/com.unity.ml-agents@3.0/manual/index.html) | 可用，包在 2026 年仍有发布 |
-
-机器人本体和可操作物体归 MuJoCo，静态场景几何导出成碰撞网格给 MuJoCo，其余装饰性物理留在 PhysX。两个世界之间的耦合（比如机器人推开一个由 PhysX 管的门）需要case by case 看。
-
-### 游戏逻辑里的时间
-
-`Physics.Simulate` 只管物理。动画、粒子、协程里的 `WaitForSeconds`、shader 里的 `_Time`（水面动画就靠它）都跟着 Unity 的帧时间走。凭记忆，`Time.captureDeltaTime` 能让每帧推进固定的仿真时间，从而把这些一并锁定，但本轮检索没有覆盖到它，需要实测。Asset Store 库里若有直接读系统时钟的代码，要逐个找出来。
-
-
-
-- 大规模并行：Unity 是一个进程一个环境。大规模强化学习，这是结构性差距，需要换成 MuJoCo MJX 那一类架构。
-- 集群上的headless rendering：AI2-THOR 的 headless 版本当年[依赖 Unity Simulation Pro](https://blog.allenai.org/ai2-thor-partners-with-unity-to-enable-headless-multi-node-training-in-the-cloud-571802be5ad3)。旧版 Unity Simulation 已于 [2023 年 12 月弃用](https://docs.unity3d.com/Simulation/manual/index.html)；新版 Simulation Pro 在 [2026 年 9 月以 Early Access 发布](https://unity.com/blog/unity-industry-product-releases-2026)，带 headless Linux 构建目标，但要求 Unity Industry 许可。
-
-先在 Unity 内做一个最小闭环：一个场景、一个 MuJoCo 机器人、手动步进、第一视角图像送出、动作送回。这一步能直接暴露上面第 1、2 项的真实成本，并且完全不涉及移植。
-Unity [官方文档](https://docs.unity.com/en-us/engine/current/script-reference/unityengine/time/capturedeltatime)对 `Time.captureDeltaTime` 的描述是：设为非零后，`Time.time` 每帧按该间隔推进，与真实时间和帧耗时无关。同一页紧接着写明：它对 `Time.unscaledTime` 没有任何影响，依赖 unscaled time 的动画和效果不会被锁住。所以它只锁住一条clock。Unity 里实际并存着好几条：
+两条路线:
+1. Try [Prowl](https://github.com/ProwlEngine/Prowl). 评估porting effort and gaps
+2. Hack Unity native API 6 个(or even more)?
+	1. Build up toy example: [Mujoco](https://mujoco.readthedocs.io/en/3.6.0/unity.html) official plugin. 一个场景、一个 MuJoCo 机器人、手动步进、第一视角图像送出、动作送回。这一步能直接暴露上面第 1、2 项的真实成本，并且完全不涉及移植。把 simulation mode 设为 Script 后手动调用 [`Physics.Simulate`](https://docs.unity3d.com/ScriptReference/Physics.Simulate.html)，每次传固定步长. 由外部模型驱动步进: ML-Agents 的 [`DisableAutomaticStepping()` 与 `EnvironmentStep()`](https://docs.unity3d.com/Packages/com.unity.ml-agents@3.0/manual/index.html)
+	   机器人本体和可操作物体归 MuJoCo，静态场景几何导出成碰撞网格给 MuJoCo，其余装饰性物理留在 PhysX。两个世界之间的耦合（比如机器人推开一个由 PhysX 管的门）需要case by case 看。
+	2. Review the APIs, check if all 6 or even more
+	3. Hack the APIs at binary level.
 
 | 时钟                                                                                                        | 典型使用者                                | `captureDeltaTime` 能否锁住                                                                          |
 | --------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------ |
@@ -30,7 +15,21 @@ Unity [官方文档](https://docs.unity.com/en-us/engine/current/script-referenc
 | 视频时钟                                                                                                      | Video Player                         | [可设为与 captureFramerate 同步](https://docs.unity.com/en-us/engine/7000.0/manual/video/player/clock) |
 | 异步完成时刻                                                                                                    | 资源异步加载、`Task.Delay`、后台线程回调           | 不能，结果落在哪一帧取决于真实耗时                                                                                |
 
-Shader 的 `_Time` 属于哪一条，我搜了两轮都没有找到文档依据, 要拿您的水面 shader 实测。
+Shader 的 `_Time` 属于哪一条，搜了两轮都没有找到文档依据, 要拿水面 shader 实测。
+
+4. Test with `波斯王子时之砂`
+5. Test with fast forward ViT/MLP inference.
+
+---
+
+
+`Physics.Simulate` 只管物理。动画、粒子、协程里的 `WaitForSeconds`、shader 里的 `_Time`（水面动画就靠它）都跟着 Unity 的帧时间走。凭记忆，`Time.captureDeltaTime` 能让每帧推进固定的仿真时间，从而把这些一并锁定，但本轮检索没有覆盖到它，需要实测。Asset Store 库里若有直接读系统时钟的代码，要逐个找出来。
+
+- 大规模并行：Unity 是一个进程一个环境。大规模强化学习，这是结构性差距，需要换成 MuJoCo MJX 那一类架构。
+- 集群上的headless rendering：AI2-THOR 的 headless 版本当年[依赖 Unity Simulation Pro](https://blog.allenai.org/ai2-thor-partners-with-unity-to-enable-headless-multi-node-training-in-the-cloud-571802be5ad3)。旧版 Unity Simulation 已于 [2023 年 12 月弃用](https://docs.unity3d.com/Simulation/manual/index.html)；新版 Simulation Pro 在 [2026 年 9 月以 Early Access 发布](https://unity.com/blog/unity-industry-product-releases-2026)，带 headless Linux 构建目标，但要求 Unity Industry 许可。
+
+
+Unity [官方文档](https://docs.unity.com/en-us/engine/current/script-reference/unityengine/time/capturedeltatime)对 `Time.captureDeltaTime` 的描述是：设为非零后，`Time.time` 每帧按该间隔推进，与真实时间和帧耗时无关。同一页紧接着写明：它对 `Time.unscaledTime` 没有任何影响，依赖 unscaled time 的动画和效果不会被锁住。所以它只锁住一条clock。Unity 里实际并存着好几条：
 
 1. Asset Store 库里读 `Stopwatch` 的代码搬到任何引擎上还是读墙钟。自研引擎唯一的好处是能从底层保证只有一条时钟，但前提是所有上层代码都重写。
 2. 严重程度可以分级。 训练需要的是因果一致，即模型思考期间世界不动，未必需要逐位确定性。一条泄漏的时钟只有在影响第一视角画面或影响物理状态时才要紧。音频时钟在 VLA 不吃音频输入时可以忽略；UI 动效不进入机器人视野时也可以忽略。
