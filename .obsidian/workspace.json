@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Unity for Simulation.md",
+                "file": "GAME_AI.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Unity for Simulation"
+              "title": "GAME_AI"
             }
           }
         ]
@@ -83,7 +83,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 200,
+    "collapsed": true
   },
   "right": {
     "id": "48cff983ce0f6dce",
@@ -190,7 +191,8 @@
   },
   "active": "2d3a2080690c92cc",
   "lastOpenFiles": [
-    "GAME_AI.md",
-    "Unity for Simulation.md"
+    "README.md",
+    "Unity for Simulation.md",
+    "GAME_AI.md"
   ]
 }
