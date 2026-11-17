@@ -1,3 +1,8 @@
+甚至可以用 rule base 来写, code as culture?
+
+---
+
+
 利用游戏train一个LLM / 脑结构 来试图带有real life 泛化, 我感觉需要用到的数据量 和 search space 太大了.  引入一个 frozen llm, work as `culture` thing. input to the culture llm is:
 game progress, 血槽 等状态, 年龄(to month). prompt 类似于: 你是一个 名字叫 alpha 1 的雄性3岁6个月狼, 生活在 yellow stone amethyst mountain. 看到了x, 刚经历了x, 现在应该做什么, 从下面的list 当中选取 {browse around, hunt the x, 驱赶elk尸体旁边的乌鸦, etc}, 用json 格式回复.
 
