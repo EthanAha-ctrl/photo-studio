@@ -221,3 +221,55 @@ Sources:
 - [Milling process simulation with Radioss (Altair forum)](https://community.altair.com/discussion/36368/milling-process-simulation-with-radioss)
 - [OpenRadioss Dataset Generation (NVIDIA PhysicsNeMo)](https://docs.nvidia.com/physicsnemo/26.05/physicsnemo/examples/structural_mechanics/openradioss_dataset_gen/README.html)
 - [Rheological and Micromechanical Modelling of Wheat Flour Dough (thesis)](https://core.ac.uk/download/12038942.pdf)
+
+
+---
+
+RoboTTT：确实没有专门处理 OOD
+
+- 全文没有出现 "OOD"；"out of distribution" 只出现一次，用来批评把历史直接拼接的基线，与其自身无关。
+- 损失、数据划分、训练流程中，没有任何一项是为分布外输入设计的。
+- 最接近 OOD 的实验是 Circuit 任务：80 种配置，训练 20 种，测试其余 60 种。这属于同一任务族内的组合泛化。
+- “对扰动的鲁棒性”实验中，扰动数据（30 分钟）已并入训练，测到的是见过的扰动类型。
+- 没有分析测试输入远离训练分布时 fast weights 的行为；局限性与未来工作也未提及对新物体、新场景、新任务的泛化。
+
+它证明的是长上下文记忆有效，适应能力向分布外延伸多远，论文没有回答。
+
+## 公开文献处理未见 OOD 数据的五种做法
+
+| 做法 | 代表工作 | 适应能力从何而来 | 对 OOD 的实际效果 |
+|---|---|---|---|
+| 扩大训练分布，使测试不再是 OOD | 域随机化；AdA（XLand，10^40 量级任务空间加自动课程） | 无显式适应，或由记忆隐式完成 | AdA 能在人类时间尺度上适应未见的手工任务，作者报告适应能力取决于训练任务分布的规模与复杂度 |
+| 推断隐变量再条件化 | RMA（教师看特权参数，学生由历史推断） | 监督学出的估计器 | 估计误差越大，基础策略越差；后续工作 A-RMA、SPARC 均针对这一缺陷 |
+| 黑箱元学习，上下文内适应 | RL²、Algorithm Distillation、DPT | 序列模型在训练任务分布上学出 | 综述的共识：默认元训练与元测试同分布，对真正的 OOD 任务普遍吃力；AD 仅在窄范围内有效，DPT 只能略微超出分布 |
+| 梯度式元学习 | MAML | 内环是梯度下降，只元学习初始化 | Finn 与 Levine 报告：比吞入全部数据的循环式元学习器更适合外推到元训练分布之外，且多走许多步梯度也不易崩 |
+| 纯测试时自适应，不做元训练 | Sun 等 2020 的 TTT；TEMPO（NeurIPS 2026） | 测试时现场的自监督或价值最大化目标 | TEMPO 在平地、无域随机化下训练，测试时遇到未见的摩擦、负载、崎岖地形，实机 Go2 的平均回报由 89.8 升至 98.7 |
+
+## 对我们的含义
+
+1. **TTT fast weights 站在有利的一侧。** 内环是真实的梯度下降，属于第四行；循环式与注意力式的 ICL 属于第三行。文献里“梯度式外推更好”的结论，正是选择 fast weights 而非上下文作为载体的理论依据。
+
+2. **但元学习出的慢参数仍受训练分布约束。** `W_0`、`η`、投影都是在见过的任务上学出的，梯度下降这个规则是通用的，喂给它的特征与目标却未必。您提出的 50/10/40 划分，测的正是这一处的外推边界，文献里没有现成答案。
+
+3. **内环目标的选择决定 OOD 下的可靠性。** TEMPO 的局限在于依赖一个在分布外仍然可信的冻结 critic；自监督重建目标没有这个依赖，却与任务回报无直接关系。这又回到先前的设计点：reward 以何种方式进入内环。
+
+4. **任务分布的广度是硬约束。** AdA 的结论表明，适应能力随训练任务分布的规模增长。面坨参数空间若维度过低，任何划分都难以训出可外推的适应能力，这是支持采用连续介质后端的又一条理由。
+
+**证据缺口**：我没有找到针对 TTT 层 fast weights 在分布外输入下行为的专门研究；Akyürek 等 2024 年在 ARC 上的测试时训练工作，本轮检索没有返回结果，其结论我未能核对。
+
+Sources:
+- [RoboTTT: Context Scaling for Robot Policies](https://arxiv.org/html/2607.15275v1)
+- [A Survey of Meta-Reinforcement Learning (Beck et al.)](https://jakebeck.com/survey.pdf)
+- [A Tutorial on Meta-Reinforcement Learning](https://www.alphaxiv.org/abs/2301.08028)
+- [Meta-Learning and Universality (arXiv 1710.11622)](https://www.arxiv.org/pdf/1710.11622)
+- [Task-Aware Virtual Training for OOD tasks in meta-RL (arXiv 2502.02834)](https://arxiv.org/html/2502.02834v2)
+- [An Information-Theoretic Analysis of OOD generalization in meta-RL (arXiv 2510.23448)](https://www.arxiv.org/pdf/2510.23448)
+- [In-context Reinforcement Learning with Algorithm Distillation](https://arxiv.org/pdf/2210.14215)
+- [A Survey of In-Context Reinforcement Learning](https://arxiv.org/html/2502.07978v1)
+- [RL + Transformer = A General-Purpose Problem Solver](https://arxiv.org/html/2501.14176v1)
+- [Human-Timescale Adaptation in an Open-Ended Task Space (AdA)](https://arxiv.org/abs/2301.07608)
+- [RMA: Rapid Motor Adaptation for Legged Robots](https://arxiv.org/pdf/2107.04034)
+- [SPARC (AAAI 2026)](https://www.cs.utexas.edu/%7Epstone/Papers/bib2html-links/SPARC_aaai2026.pdf)
+- [Test-Time Training with Self-Supervision for Generalization under Distribution Shifts](https://arxiv.org/pdf/1909.13231)
+- [TEMPO: Efficient Test-Time Adaptation For Robot Policies](https://arxiv.org/html/2610.20318v1)
+- [Learning From History: Test-Time Verification and Adaptation for Robotics (CMU)](https://publications.ri.cmu.edu/storage/publications/2026/07/main_20260706112439.pdf)
